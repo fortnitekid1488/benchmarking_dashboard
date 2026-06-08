@@ -4,10 +4,13 @@
 
 Исходный workbook не перезаписывается. Все результаты создаются как новые файлы в `outputs/`.
 
+Если вы открыли чистую версию без компаний, начните с отдельной инструкции: [как добавить компании, источники и адаптировать дашборд](docs/customization_ru.md).
+
 ## Что внутри
 
 - `financial_benchmark_template.xlsx` — одно-листовый Excel-шаблон `Свод` с сохраненными метриками, формулами, ячейками и оформлением.
 - `config/company_source_registry.json` — реестр компаний, батчей и источников. В generic-версии он пустой: компании и URL добавляются под конкретный проект.
+- `docs/customization_ru.md` — подробная инструкция по кастомизации под новый набор компаний.
 - `scripts/prepare_aistudio_sources.py` — подготовка source-пакетов для ручной LLM-экстракции.
 - `scripts/apply_aistudio_json.py` — перенос проверенного JSON в копию Excel.
 - `web/` и `scripts/dashboard_server.py` — локальная панель управления.
@@ -84,39 +87,9 @@ start_dashboard.command
 
 ## Настройка под конкретный проект
 
-Generic-шаблон поставляется без компаний и источников. Для нового проекта нужно заполнить `config/company_source_registry.json`.
+Generic-шаблон поставляется без компаний и источников. Для нового проекта заполните `config/company_source_registry.json` и проверьте, что названия компаний совпадают с заголовками в `financial_benchmark_template.xlsx` на листе `Свод`.
 
-Минимальный формат:
-
-```json
-{
-  "batches": [
-    {
-      "batch_id": "batch_01",
-      "title": "Main batch",
-      "companies": ["company_key"]
-    }
-  ],
-  "companies": [
-    {
-      "key": "company_key",
-      "display_name": "Company Name",
-      "country": "Country",
-      "currency": "USD",
-      "preferred_period": "latest reported period for selected mode",
-      "sources": [
-        {
-          "type": "official_ir_page",
-          "url": "https://example.com/investors/reports",
-          "note": "Official reports page."
-        }
-      ]
-    }
-  ]
-}
-```
-
-После добавления компаний их названия должны совпадать с заголовками в `financial_benchmark_template.xlsx` на листе `Свод`, иначе скрипт не найдет колонку для записи.
+Подробный порядок настройки, рекомендации по источникам отчетности и список файлов, которые обычно нужно менять, лежат в [docs/customization_ru.md](docs/customization_ru.md).
 
 ## Метрики
 
