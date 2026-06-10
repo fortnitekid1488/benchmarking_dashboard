@@ -8,6 +8,7 @@ import copy
 import json
 import re
 import sys
+import unicodedata
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +28,13 @@ OUTPUT_MAX_ROW = 59
 OUTPUT_MAX_COL = 31
 MIN_VISIBLE_COMPANY_COL_WIDTH = 11.5
 EXCEL_ERROR_CODES = {"#DIV/0!", "#N/A", "#NAME?", "#NULL!", "#NUM!", "#REF!", "#VALUE!"}
+DEFAULT_LC_USD_RATES = {
+    "eu": 1.1306,
+    "us": 1.0,
+    "jp": 149.65,
+    "kr": 1421.6,
+    "cn": 7.1889,
+}
 QUARTER_PERIOD_RE = re.compile(
     r"\b(q[1-4]|[1-4]q)\b|first\s+quarter|second\s+quarter|third\s+quarter|fourth\s+quarter|"
     r"\bquarterly\b|three\s+months|3\s+months",
@@ -236,8 +244,66 @@ def cell_number(ws, row: int, col: int) -> float | None:
     return float(value) if is_number(value) else None
 
 
+def exchange_rate_for_column(ws, col: int) -> float | None:
+    rate = cell_number(ws, 33, col)
+    if rate is not None and rate != 0:
+        return rate
+    country = normalize_label(ws.cell(32, col).value)
+    rate = DEFAULT_LC_USD_RATES.get(country)
+    if rate is not None:
+        ws.cell(33, col).value = rate
+    return rate
+
+
 def set_if_number(ws, row: int, col: int, value: float | None, fallback: Any = None) -> None:
     ws.cell(row, col).value = value if value is not None else fallback
+
+
+def normalized_filename(value: str) -> str:
+    return unicodedata.normalize("NFC", value).casefold()
+
+
+def workbook_has_summary_sheet(path: Path) -> bool:
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            wb = load_workbook(path, read_only=True, data_only=True, keep_links=False)
+        try:
+            return SUMMARY_SHEET in wb.sheetnames
+        finally:
+            wb.close()
+    except Exception:
+        return False
+
+
+def resolve_workbook_path(path: Path) -> Path:
+    candidate = path if path.is_absolute() else (ROOT / path)
+    if candidate.exists():
+        return candidate.resolve()
+
+    search_root = candidate.parent if candidate.parent.exists() else ROOT
+    expected_name = normalized_filename(candidate.name)
+    exact_name_matches = [
+        item
+        for item in search_root.glob("*.xlsx")
+        if normalized_filename(item.name) == expected_name and item.is_file()
+    ]
+    if len(exact_name_matches) == 1:
+        return exact_name_matches[0].resolve()
+
+    summary_matches = [
+        item
+        for item in search_root.glob("*.xlsx")
+        if item.is_file() and workbook_has_summary_sheet(item)
+    ]
+    if len(summary_matches) == 1:
+        return summary_matches[0].resolve()
+
+    candidates = ", ".join(sorted(item.name for item in search_root.glob("*.xlsx"))) or "xlsx файлов нет"
+    raise FileNotFoundError(
+        "Исходный workbook не найден. Положите `financial_benchmark_template.xlsx` в корень проекта "
+        f"или передайте путь через --workbook. Искали: {candidate}. В папке {search_root}: {candidates}."
+    )
 
 
 def copy_summary_sheet(workbook_path: Path):
@@ -326,10 +392,11 @@ def converted_to_usd(ws, row: int, col: int) -> float | None:
     local_value = cell_number(ws, row, col)
     if local_value is None:
         return None
-    rate = cell_number(ws, 33, col)
     country = normalize_label(ws.cell(32, col).value)
     if country == "us":
+        exchange_rate_for_column(ws, col)
         return local_value
+    rate = exchange_rate_for_column(ws, col)
     if rate is None or rate == 0:
         return None
     if country == "eu":
@@ -596,18 +663,19 @@ def main() -> int:
 
     payloads = load_json_files(json_files)
     companies = collect_companies(payloads)
+    workbook_path = resolve_workbook_path(args.workbook)
 
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = (args.output_dir / f"aistudio_{args.mode}_excel_update_{run_id}").resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     suffix = "aistudio_annual_update" if args.mode == "annual" else "aistudio_quarterly_update"
-    output_workbook = out_dir / f"{args.workbook.stem}_{suffix}_{run_id}.xlsx"
+    output_workbook = out_dir / f"{workbook_path.stem}_{suffix}_{run_id}.xlsx"
 
-    wb, ws = copy_summary_sheet(args.workbook)
+    wb, ws = copy_summary_sheet(workbook_path)
     audit = {
         "created_at": datetime.now(timezone.utc).isoformat(),
         "mode": args.mode,
-        "source_workbook": str(args.workbook.resolve()),
+        "source_workbook": str(workbook_path),
         "json_files": [str(path.resolve()) for path in json_files],
         "output_sheet": SUMMARY_SHEET,
         "output_range": f"A1:{get_column_letter(OUTPUT_MAX_COL)}{OUTPUT_MAX_ROW}",

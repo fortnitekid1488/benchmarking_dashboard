@@ -15,7 +15,7 @@ OPEN_THIS_*_PACKAGE.txt
 
 *.log
 
-# Generated/local spreadsheet artifacts. The source template workbook is project data
+# Generated/local spreadsheet artifacts. The clean source template workbook is project data
 # and should stay committed by default.
 *.xlsx
 *.xlsm

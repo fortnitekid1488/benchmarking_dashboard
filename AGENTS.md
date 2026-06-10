@@ -6,7 +6,7 @@ This repository is a generic template for automating updates to a financial benc
 
 ## Files
 
-- `financial_benchmark_template.xlsx` is the source workbook. It should contain only the `Свод` sheet. Do not overwrite it unless the user explicitly asks.
+- `financial_benchmark_template.xlsx` is the clean source template. It should contain only the `Свод` sheet with structure, labels, formatting, and header metadata, not pre-filled benchmark values. Do not overwrite it unless the user explicitly asks.
 - `config/company_source_registry.json` contains batches, companies, and source URLs. The generic baseline should stay empty until a concrete project fills it.
 - `scripts/prepare_aistudio_sources.py` prepares source packages for quarterly and annual modes.
 - `scripts/apply_aistudio_json.py` applies returned LLM JSON to a copied workbook under `outputs/`.
@@ -51,6 +51,7 @@ Run the local dashboard:
 Portable launchers after local setup:
 
 ```bat
+update_from_github.cmd
 start_dashboard.cmd
 prepare_quarterly_sources.cmd
 prepare_annual_sources.cmd
@@ -60,7 +61,7 @@ update_annual_excel_from_aistudio.cmd
 
 For user-facing demos, prefer `start_dashboard.command` on macOS and `start_dashboard.cmd` on Windows.
 
-Generated outputs, local caches, internal Codex notes, and generated workbook files are ignored. The source workbook `financial_benchmark_template.xlsx` is project data and is expected to be committed by default. Do not stage `outputs/`, `.venv/`, `.playwright-*`, `.Codex/`, or other spreadsheet files unless the user explicitly clears that exact artifact for publication.
+Generated outputs, local caches, internal Codex notes, and generated workbook files are ignored. The clean source template `financial_benchmark_template.xlsx` is project data and is expected to be committed by default, while filled/generated benchmark workbooks are not. Do not stage `outputs/`, `.venv/`, `.playwright-*`, `.Codex/`, or other spreadsheet files unless the user explicitly clears that exact artifact for publication.
 
 ## Verification
 
@@ -81,5 +82,5 @@ For generic-template changes, also check that no sector-specific company names, 
 - Use LLM extraction only behind a strict JSON schema with period, unit, source, citation, and confidence fields.
 - Keep source provenance explicit; do not collapse annual reports, IR decks, transcripts, and finance portals into vague "internet source" labels.
 - Keep annual and quarterly modes behaviorally separate.
-- Keep AI Studio batches within the current context budget. The preparer defaults to batches of up to 6 companies, estimates prompt plus upload-source input against a 64k-token budget, auto-splits oversized batches, converts `.xlsx` and HTML-like source pages to `.txt`, uses compact SEC extracts instead of full Company Facts JSON, and mirrors only upload-ready attachments into each batch's `FILES_FOR_AI_STUDIO` folder.
+- Keep AI Studio batches within the current context budget and selected provider upload-file limit. The preparer defaults to batches of up to 6 companies, estimates prompt plus upload-source input against a 64k-token budget, auto-splits oversized batches, converts `.xlsx` and HTML-like source pages to `.txt`, uses compact SEC extracts instead of full Company Facts JSON, and mirrors only upload-ready attachments into each batch's `FILES_FOR_AI_STUDIO` folder. Provider limits live in `config/ai_provider_profiles.json`; Qwen and MiMo default to 5 files per batch, Kimi to 50, DeepSeek to 20, and Gemini uses token-budget splitting without a hard file-count cap.
 - Keep the dashboard as a thin local control surface over the scripts. Source preparation, JSON validation, and Excel writing must remain in Python so the UI can be replaced without changing the data pipeline.
